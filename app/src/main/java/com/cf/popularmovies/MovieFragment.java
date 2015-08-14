@@ -11,7 +11,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.Button;
 import android.widget.GridView;
 
 import com.cf.popularmovies.API.MoviesAPI;
@@ -24,7 +23,7 @@ import java.util.List;
 import retrofit.RestAdapter;
 import retrofit.RetrofitError;
 
-public class MovieFragment extends Fragment implements View.OnClickListener {
+public class MovieFragment extends Fragment {
 
     private static final String KEY_RESULT_DATA = "result_data";
 
@@ -33,10 +32,8 @@ public class MovieFragment extends Fragment implements View.OnClickListener {
 
     private List<Result> result_data = null;
     private ResultAdapter resultAdapter;
-    private String sort_by;
     private Boolean isTaskRunning;
-
-    Button button_reload;
+    private String sort_by;
 
     public MovieFragment() {
     }
@@ -45,7 +42,8 @@ public class MovieFragment extends Fragment implements View.OnClickListener {
     public void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
 
-        outState.putParcelableArrayList(KEY_RESULT_DATA, new ArrayList<Result>(result_data));
+        // Result data will be stored in ParcelableArrayList in order to prevent another API call
+        outState.putParcelableArrayList(KEY_RESULT_DATA, new ArrayList<>(result_data));
     }
 
     @Override
@@ -59,13 +57,14 @@ public class MovieFragment extends Fragment implements View.OnClickListener {
     public void onResume() {
         super.onResume();
 
+        // If the user changed sort_by preferences get new results
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
 
         String sort_by = sharedPreferences
                 .getString(getString(R.string.preferences_sort_by_key),
                         getString(R.string.preferences_sort_by_default_value));
 
-        if (this.sort_by != sort_by) {
+        if (sort_by != null && !this.sort_by.equals(sort_by)) {
             FetchMoviesTask fetchMoviesTask = new FetchMoviesTask();
             fetchMoviesTask.execute(sort_by);
         }
@@ -77,30 +76,36 @@ public class MovieFragment extends Fragment implements View.OnClickListener {
         super.onActivityCreated(savedInstanceState);
 
         gridView = (GridView) getActivity().findViewById(R.id.gridView_movie_poster);
-        button_reload = (Button) getActivity().findViewById(R.id.button_reload_movie_poster);
 
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
 
+        // Get sort_by preference from SharedPreferences
         sort_by = sharedPreferences
                 .getString(getString(R.string.preferences_sort_by_key),
                         getString(R.string.preferences_sort_by_default_value));
 
+
+
+        // If a InstanceState is present, we don't have to do another API call in order to reduce network traffic
         if (savedInstanceState != null) {
+            // Retrieve result data from ParcelableArrayList
             result_data = savedInstanceState.getParcelableArrayList(KEY_RESULT_DATA);
 
+            // Use the custom adapter to the result data visible in the GUI
             resultAdapter = new ResultAdapter(getActivity(), R.layout.item_gridview_movie_poster, result_data);
             gridView.setAdapter(resultAdapter);
-        } else {
+        }
+        else
+        // If no InstanceState is present, start the custom AsyncTask in order to retrieve data from the API
+        {
             FetchMoviesTask fetchMoviesTask = new FetchMoviesTask();
             fetchMoviesTask.execute(sort_by);
         }
 
-        button_reload.setOnClickListener(this);
-
+        // If a movie is selected MovieDetailActivity is started and result data is passed by
         gridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-
                 Result result = resultAdapter.getItem(position);
 
                 Intent sendResultToMovieDetailActivity = new Intent(getActivity(), MovieDetailActivity.class)
@@ -109,20 +114,7 @@ public class MovieFragment extends Fragment implements View.OnClickListener {
                 startActivity(sendResultToMovieDetailActivity);
             }
         });
-    }
 
-    @Override
-    public void onClick(View v) {
-        switch (v.getId()) {
-            case R.id.button_reload_movie_poster:
-
-                if (! isTaskRunning) {
-                    FetchMoviesTask fetchMoviesTask = new FetchMoviesTask();
-                    fetchMoviesTask.execute(sort_by);
-                }
-
-                break;
-        }
     }
 
     private class FetchMoviesTask extends AsyncTask<String, Void, List<Result>> {
@@ -130,6 +122,7 @@ public class MovieFragment extends Fragment implements View.OnClickListener {
         private String api_endpoint = "http://api.themoviedb.org/3";
         private RetrofitError retrofitError = null;
 
+        // In order to avoid multiple AsyncTask we set isTaskRunning true first
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
@@ -137,6 +130,7 @@ public class MovieFragment extends Fragment implements View.OnClickListener {
             isTaskRunning = true;
         }
 
+        // Use RetroFit to retrieve data from API
         @Override
         protected List<Result> doInBackground(String... params) {
 
@@ -145,9 +139,9 @@ public class MovieFragment extends Fragment implements View.OnClickListener {
             try {
 
                 RestAdapter restAdapter = new RestAdapter.Builder()
-                    .setLogLevel(RestAdapter.LogLevel.FULL)
-                    .setEndpoint(api_endpoint)
-                    .build();
+                        .setLogLevel(RestAdapter.LogLevel.FULL)
+                        .setEndpoint(api_endpoint)
+                        .build();
 
                 MoviesAPI moviesAPI = restAdapter.create(MoviesAPI.class);
                 page = moviesAPI.getPages(API_KEY, params[0]);
@@ -162,23 +156,46 @@ public class MovieFragment extends Fragment implements View.OnClickListener {
             return page.getResults();
         }
 
+        // After we retrieved data from API it's time to handle the GUI
         @Override
         protected void onPostExecute(List<Result> results) {
             super.onPostExecute(results);
 
             result_data = results;
+            Snackbar snackbar = null;
+
+            // Use the custom adapter to the result data visible in the GUI
             resultAdapter = new ResultAdapter(getActivity(), R.layout.item_gridview_movie_poster, result_data);
             gridView.setAdapter(resultAdapter);
 
+            // If the API call didn't work out as expected Snackbar will appear
             if (retrofitError != null) {
-                Snackbar.make(getView(), retrofitError.getMessage(), Snackbar.LENGTH_LONG).show();
-                button_reload.setVisibility(Button.VISIBLE);
+
+                snackbar = Snackbar.make(getView(), retrofitError.getMessage(), Snackbar.LENGTH_INDEFINITE);
+
+                snackbar.setAction(getString(R.string.button_reload), new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (!isTaskRunning) {
+                            FetchMoviesTask fetchMoviesTask = new FetchMoviesTask();
+                            fetchMoviesTask.execute(sort_by);
+                        }
+
+                    }
+                });
+
+                snackbar.show();
             }
             else
             {
-                button_reload.setVisibility(Button.GONE);
+                if (snackbar != null)
+                {
+                    // If the API call worked, hide Snackbar if present
+                    snackbar.dismiss();
+                }
             }
 
+            // AsyncTask is done, so we set isTaskRunning back to false
             isTaskRunning = false;
         }
     }

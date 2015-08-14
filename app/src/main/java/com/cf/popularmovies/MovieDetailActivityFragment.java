@@ -12,10 +12,6 @@ import android.widget.TextView;
 import com.cf.popularmovies.model.Result;
 import com.squareup.picasso.Picasso;
 
-
-/**
- * A placeholder fragment containing a simple view.
- */
 public class MovieDetailActivityFragment extends Fragment {
 
     private Result result;
@@ -40,6 +36,8 @@ public class MovieDetailActivityFragment extends Fragment {
         imageView_movie_header = (ImageView) getActivity().findViewById(R.id.imageView_movie_header);
         imageView_movie_poster_small = (ImageView) getActivity().findViewById(R.id.imageView_movie_poster_small);
 
+        // Handle image loading for "BackDrop" image
+        // If no image is available use a placeholder instead
         if (result.getBackdropPath() != null)
         {
             Picasso.with(getActivity().getApplicationContext())
@@ -51,6 +49,8 @@ public class MovieDetailActivityFragment extends Fragment {
                     .into(imageView_movie_header);
         }
 
+        // Handle image loading for "Poster" image
+        // If no image is available use a placeholder instead
         if (result.getPosterPath() != null)
         {
             Picasso.with(getActivity().getApplicationContext())
@@ -62,13 +62,11 @@ public class MovieDetailActivityFragment extends Fragment {
                     .into(imageView_movie_poster_small);
         }
 
+        // Update the GUI with data
         textView_movie_title.setText(result.getTitle());
-
         textView_release_date.setText(result.getReleaseDate());
-
-        String vote_average = result.getVoteAverage() + "/10";
+        String vote_average = result.getVoteAverage() + "/10.0";
         textView_vote_average.setText(vote_average);
-
         textView_details.setText(result.getOverview());
     }
 
@@ -76,6 +74,7 @@ public class MovieDetailActivityFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
 
+        // Get data from parent activity, no API call required
         Intent intent = getActivity().getIntent();
 
         if (intent != null && intent.hasExtra("result")) {
@@ -87,6 +86,7 @@ public class MovieDetailActivityFragment extends Fragment {
         return inflater.inflate(R.layout.fragment_movie_detail, container, false);
     }
 
+    // Helper function to construct image URLs
     private String getImageURL(String posterPath) {
 
         final String IMAGE_BASE_URL = "http://image.tmdb.org/t/p/";
